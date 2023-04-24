@@ -13,33 +13,46 @@ logging.basicConfig(format="%(asctime)s - %(levelname)s: %(message)s", level=log
 
 
 class Diffusion:
-    def __init__(self, noise_steps=1000, beta_start=1e-4, beta_end=0.02, img_size=256, device="cuda"):
-        self.noise_steps = noise_steps
-        self.beta_start = beta_start
-        self.beta_end = beta_end
-        self.img_size = img_size
-        self.device = device
 
+    def __init__(self, noise_steps=1000, beta_start=1e-4, beta_end=0.02, img_size=256, device="cuda"):
+        # define the noise steps, and that is the number of the standard normal distribution
+        self.noise_steps = noise_steps
+        # define the beta start value
+        self.beta_start = beta_start
+        # define the beta end value
+        self.beta_end = beta_end
+        # define generate the image size
+        self.img_size = img_size
+        # define the device to running
+        self.device = device
+        # define the noise schedule for per step
         self.beta = self.prepare_noise_schedule().to(device)
+        # define the alpha value
+        # $\alpha = 1 - \beta$
         self.alpha = 1. - self.beta
+        # \hat \alpha = \alpha_0 \ctime \alpha_1 \ctime \alpha_2 ... \alpha_t
         self.alpha_hat = torch.cumprod(self.alpha, dim=0)
 
     def prepare_noise_schedule(self):
         return torch.linspace(self.beta_start, self.beta_end, self.noise_steps)
 
+    # generate the noise image for forward direction
     def noise_images(self, x, t):
         sqrt_alpha_hat = torch.sqrt(self.alpha_hat[t])[:, None, None, None]
         sqrt_one_minus_alpha_hat = torch.sqrt(1 - self.alpha_hat[t])[:, None, None, None]
         Ɛ = torch.randn_like(x)
         return sqrt_alpha_hat * x + sqrt_one_minus_alpha_hat * Ɛ, Ɛ
 
+    # define random the sample for per process
     def sample_timesteps(self, n):
-        return torch.randint(low=1, high=self.noise_steps, size=(n,))
+        return torch.randint(low=1, high=self.noise_steps, size=(n, ))
 
+    # this is the backward direction: x_t -> t_(t-1)
     def sample(self, model, n):
         logging.info(f"Sampling {n} new images....")
         model.eval()
         with torch.no_grad():
+            # generate the random noise image, this is input for the model
             x = torch.randn((n, 3, self.img_size, self.img_size)).to(self.device)
             for i in tqdm(reversed(range(1, self.noise_steps)), position=0):
                 t = (torch.ones(n) * i).long().to(self.device)
@@ -99,14 +112,15 @@ def launch():
     args.epochs = 500
     args.batch_size = 12
     args.image_size = 64
-    args.dataset_path = r"C:\Users\dome\datasets\landscape_img_folder"
-    args.device = "cuda"
+    args.dataset_path = r"D:\picture\datasets\images_small"
+    args.device = "cpu"
     args.lr = 3e-4
     train(args)
 
 
 if __name__ == '__main__':
     launch()
+
     # device = "cuda"
     # model = UNet().to(device)
     # ckpt = torch.load("./working/orig/ckpt.pt")
